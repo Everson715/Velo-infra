@@ -1,0 +1,117 @@
+services:
+  velo-postgres:
+      image: postgres:16-alpine
+      container_name: velo-postgres
+      restart: always
+      environment:
+        - POSTGRES_USER=postgres
+        - POSTGRES_PASSWORD=postgres
+      ports:
+        - "5432:5432"
+      volumes:
+        - velo-db-data:/var/lib/postgresql/data
+        - ./init-scripts:/docker-entrypoint-initdb.d
+      networks:
+        - velo_network
+
+  identity-driver:
+    build:
+      context: ./identity-driver-service
+      dockerfile: Dockerfile
+    container_name: velo-php-identity
+    ports:
+      - "8001:8000"
+    environment:
+      - DB_HOST=velo-postgres
+      - DB_PORT=5432
+      - DB_DATABASE=velo_identity
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      - ./identity-driver-service:/var/www/html
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    networks:
+      - velo_network
+
+  trip-matching:
+    build:
+      context: ./trip-matching-service
+      dockerfile: Dockerfile
+    container_name: velo-php-trips
+    ports:
+      - "8002:8000"
+    environment:
+      - DB_HOST=velo-postgres
+      - DB_PORT=5432
+      - DB_DATABASE=velo_trips
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      - ./trip-matching-service:/var/www/html
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    networks:
+      - velo_network
+
+  review-rating:
+    build:
+      context: ./review-rating-service
+      dockerfile: Dockerfile
+    container_name: velo-php-reviews
+    ports:
+      - "8003:8000"
+    environment:
+      - DB_HOST=velo-postgres
+      - DB_PORT=5432
+      - DB_DATABASE=velo_reviews
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      - ./review-rating-service:/var/www/html
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    networks:
+      - velo_network
+
+  payment-finance:
+    build:
+      context: ./payment-finance-service
+      dockerfile: Dockerfile
+    container_name: velo-php-payments
+    ports:
+      - "8004:8000"
+    environment:
+      - DB_HOST=velo-postgres
+      - DB_PORT=5432
+      - DB_DATABASE=velo_payments
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      - ./payment-finance-service:/var/www/html
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    networks:
+      - velo_network
+
+  tracking-telemetry:
+    build:
+      context: ./tracking-telemetry-service
+      dockerfile: Dockerfile
+    container_name: velo-php-tracking
+    ports:
+      - "8005:8000"
+    environment:
+      - DB_HOST=velo-postgres
+      - DB_PORT=5432
+      - DB_DATABASE=velo_tracking
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      - ./tracking-telemetry-service:/var/www/html
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    networks:
+      - velo_network
+
+volumes:
+  velo-db-data:
+
+networks:
+  velo_network:
+    driver: bridge
