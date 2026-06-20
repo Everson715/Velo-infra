@@ -1,18 +1,22 @@
-version: '3.8' # Remova se o Docker acusar o warning de obsoleto
+version: '3.8'
 
 services:
+  # 1. BANCO DE DADOS (Corrigido para usar a imagem oficial do Postgres)
   velo-postgres:
-    image: postgres:16-alpine
+    image: postgres:15-alpine
     container_name: velo-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: velo_trips
     ports:
       - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_MULTIPLE_DATABASES=velo_trips,velo_identity 
+    volumes:
+      - velo-db-data:/var/lib/postgresql/data
     networks:
       - velo-network
 
+  # 2. MICROSERVIÇO TRIP MATCHING
   trip-matching:
     build:
       context: ../Velo-trip-matching-service
@@ -27,6 +31,29 @@ services:
     networks:
       - velo-network
 
+  # 3. MICROSERVIÇO IDENTITY DRIVER (PHP / Laravel)
+  identity-driver:
+    build:
+      context: ../Velo-identity-driver-service 
+      dockerfile: Dockerfile
+    container_name: velo-php-identity
+    ports:
+      - "8001:8000" # Acessa na sua máquina via localhost:8001
+    environment:
+      - DB_HOST=velo-postgres
+      - DB_PORT=5432
+      - DB_DATABASE=velo_identity
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=password
+    volumes:
+      - ../Velo-identity-driver-service:/var/www/html 
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    depends_on:
+      - velo-postgres
+    networks:
+      - velo-network 
+
+  # 4. GATEWAY NGINX
   nginx-gateway:
     image: nginx:1.25-alpine
     container_name: velo-nginx
@@ -36,8 +63,15 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - trip-matching
+      - identity-driver
+      - tracking-telemetry
+      - review-rating
+      - payment-finance
     networks:
       - velo-network
+
+volumes:
+  velo-db-data: # Garante que os dados do banco não sumam ao reiniciar o container
 
 networks:
   velo-network:
