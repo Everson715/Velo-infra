@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. BANCO DE DADOS (Corrigido para usar a imagem oficial do Postgres)
   velo-postgres:
@@ -60,13 +58,10 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - trip-matching
       - identity-driver
-      - tracking-telemetry
-      - review-rating
-      - payment-finance
     networks:
       - velo-network
 
