@@ -1,20 +1,82 @@
+version: '3.8'
+
 services:
-  # 1. BANCO DE DADOS
-  velo-postgres:
+  # 1. Banco do Identity Driver
+  velo-postgres-identity:
     image: postgres:15-alpine
-    container_name: velo-postgres
+    container_name: velo-postgres-identity
     ports:
       - "5432:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
-      - POSTGRES_MULTIPLE_DATABASES=velo_trips,velo_identity 
+      - POSTGRES_DB=velo_identity
     volumes:
-      - velo-db-data:/var/lib/postgresql/data
+      - velo-identity-db-data:/var/lib/postgresql/data
     networks:
       - velo-network
 
-  # 2. MICROSERVIÇO TRIP MATCHING (NestJS)
+  # 2. Banco do Trip Matching
+  velo-postgres-trips:
+    image: postgres:15-alpine
+    container_name: velo-postgres-trips
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=velo_trips
+    volumes:
+      - velo-trips-db-data:/var/lib/postgresql/data
+    networks:
+      - velo-network
+
+  # 3. Banco do Payment Finance
+  velo-postgres-payments:
+    image: postgres:15-alpine
+    container_name: velo-postgres-payments
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=velo_payments
+    volumes:
+      - velo-payments-db-data:/var/lib/postgresql/data
+    networks:
+      - velo-network
+
+  # 4. Banco do Review Rating
+  velo-postgres-reviews:
+    image: postgres:15-alpine
+    container_name: velo-postgres-reviews
+    ports:
+      - "5435:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=velo_reviews
+    volumes:
+      - velo-reviews-db-data:/var/lib/postgresql/data
+    networks:
+      - velo-network
+
+  # 5. Cache/Persistência do Tracking Telemetry (Redis Dedicado)
+  velo-redis-telemetry:
+    image: redis:7-alpine
+    container_name: velo-redis-telemetry
+    ports:
+      - "6379:6379"
+    volumes:
+      - velo-telemetry-cache-data:/data
+    networks:
+      - velo-network
+
+  # ==========================================
+  # MICROSSERVIÇOS DA APLICAÇÃO
+  # ==========================================
+
+  # Trip Matching Service
   trip-matching:
     build:
       context: ../Velo-trip-matching-service
@@ -23,13 +85,14 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:password@velo-postgres:5432/velo_trips?schema=public
+      - DATABASE_URL=postgresql://postgres:password@velo-postgres-trips:5432/velo_trips?schema=public
+      - PAYMENT_SERVICE_URL=http://payment-finance-service:8080/api/v1/payments/capture
     depends_on:
-      - velo-postgres
+      - velo-postgres-trips
     networks:
       - velo-network
 
-  # 3. MICROSERVIÇO IDENTITY DRIVER (PHP / Laravel)
+  # Identity Driver Service
   identity-driver:
     build:
       context: ../Velo-identity-driver-service 
@@ -38,7 +101,7 @@ services:
     ports:
       - "8001:8000"
     environment:
-      - DB_HOST=velo-postgres
+      - DB_HOST=velo-postgres-identity
       - DB_PORT=5432
       - DB_DATABASE=velo_identity
       - DB_USERNAME=postgres
@@ -47,36 +110,53 @@ services:
       - ../Velo-identity-driver-service:/var/www/html 
     command: php artisan serve --host=0.0.0.0 --port=8000
     depends_on:
-      - velo-postgres
+      - velo-postgres-identity
     networks:
       - velo-network 
 
-  # 4. MICROSERVIÇO TELEMETRY (Fastify Mock)
+  # Telemetry Service (Mock)
   tracking-telemetry-service:
     image: node:20-alpine
     container_name: velo-tracking-telemetry
     command: node -e "const http = require('http'); http.createServer((req, res) => res.end('Telemetry Mock Running')).listen(3000);"
+    environment:
+      - REDIS_HOST=velo-redis-telemetry
+      - REDIS_PORT=6379
+    depends_on:
+      - velo-redis-telemetry
     networks:
       - velo-network
     
-# 5. MICROSERVIÇO PAYMENT FINANCE (Spring Boot Mock Corrigido)
+  # Payment Finance Service (Mock)
   payment-finance-service:
     image: alpine:latest
     container_name: velo-payment-finance
     command: >
       sh -c "while true; do echo -e 'HTTP/1.1 200 OK\nContent-Type: application/json\n\n{\"status\":\"Payment Mock Running\"}' | nc -l -p 8080; done"
+    environment:
+      - DB_HOST=velo-postgres-payments
+      - DB_PORT=5432
+      - DB_DATABASE=velo_payments
+    depends_on:
+      - velo-postgres-payments
     networks:
       - velo-network
 
-  # 6. MICROSERVIÇO REVIEW RATING (NestJS Mock)
+  # Review Rating Service (Mock)
   review-rating-service:
     image: node:20-alpine
     container_name: velo-review-rating
     command: node -e "const http = require('http'); http.createServer((req, res) => res.end('Review Mock Running')).listen(3000);"
+    environment:
+      - DB_HOST=velo-postgres-reviews
+      - DB_PORT=5432
+      - DB_DATABASE=velo_reviews
+    depends_on:
+      - velo-postgres-reviews
     networks:
       - velo-network
 
-  # 7. GATEWAY NGINX
+  # Gateway Nginx
   nginx-gateway:
     image: nginx:1.25-alpine
     container_name: velo-nginx
@@ -94,7 +174,11 @@ services:
       - velo-network
 
 volumes:
-  velo-db-data:
+  velo-identity-db-data:
+  velo-trips-db-data:
+  velo-payments-db-data:
+  velo-reviews-db-data:
+  velo-telemetry-cache-data:
 
 networks:
   velo-network:
