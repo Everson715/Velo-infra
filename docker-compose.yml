@@ -113,15 +113,26 @@ services:
     networks:
       - velo-network 
 
-  # Telemetry Service (Mock)
+  # Telemetry Service (Real Build)
   tracking-telemetry-service:
-    image: node:20-alpine
+    build:
+      context: ../Velo-tracking-telemetry-service
+      dockerfile: Dockerfile
     container_name: velo-tracking-telemetry
-    command: node -e "const http = require('http'); http.createServer((req, res) => res.end('Telemetry Mock Running')).listen(3000);"
+    restart: always
     environment:
-      - REDIS_HOST=velo-redis-telemetry
-      - REDIS_PORT=6379
+      - PORT=3003
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:password@velo-postgres-identity:5432/velo_identity?schema=public
+      - REDIS_URL=redis://velo-redis-telemetry:6379
+      - JWT_SECRET=dummysecretforvalidation
+      - JWT_ISSUER=Laravel
+      - JWT_AUDIENCE=Velo
+      - PUBLIC_KEY_URL=http://identity-driver:8000/api/v1/auth/certs
+    ports:
+      - "3003:3003"
     depends_on:
+      - velo-postgres-identity
       - velo-redis-telemetry
     networks:
       - velo-network
