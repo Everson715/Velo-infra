@@ -12,12 +12,7 @@ services:
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=velo_identity
     volumes:
-<<<<<<< HEAD
-      - velo-db-data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
-=======
       - velo-identity-db-data:/var/lib/postgresql/data
->>>>>>> b4d5f60cdfd260dce08799b832f2ebcfc7ab2795
     networks:
       - velo-network
 
